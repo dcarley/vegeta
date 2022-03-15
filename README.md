@@ -82,6 +82,8 @@ attack command:
     	Use persistent connections (default true)
   -key string
     	TLS client PEM encoded private key file
+  -key-log string
+    	TLS key log file for packet capture decryption
   -laddr value
     	Local IP address (default 0.0.0.0)
   -lazy
@@ -286,6 +288,11 @@ Specifies whether to reuse TCP connections between HTTP requests.
 
 Specifies the PEM encoded TLS client certificate private key file to be
 used with HTTPS requests.
+
+#### `-key-log`
+
+Specifies a file to write TLS key logs which can be used to [decrypt packet
+captures in Wireshark](https://wiki.wireshark.org/TLS#using-the-pre-master-secret).
 
 #### `-laddr`
 

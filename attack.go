@@ -37,6 +37,7 @@ func attackCmd() command {
 	fs.BoolVar(&opts.chunked, "chunked", false, "Send body with chunked transfer encoding")
 	fs.StringVar(&opts.certf, "cert", "", "TLS client PEM encoded certificate file")
 	fs.StringVar(&opts.keyf, "key", "", "TLS client PEM encoded private key file")
+	fs.StringVar(&opts.keyLogf, "key-log", "", "TLS key log file for packet capture decrytion")
 	fs.Var(&opts.rootCerts, "root-certs", "TLS root certificate files (comma separated list)")
 	fs.BoolVar(&opts.http2, "http2", true, "Send HTTP/2 requests when supported by the server")
 	fs.BoolVar(&opts.h2c, "h2c", false, "Send HTTP/2 requests without TLS encryption")
@@ -79,6 +80,7 @@ type attackOpts struct {
 	certf          string
 	keyf           string
 	rootCerts      csl
+	keyLogf        string
 	http2          bool
 	h2c            bool
 	insecure       bool
@@ -167,7 +169,17 @@ func attack(opts *attackOpts) (err error) {
 	}
 	defer out.Close()
 
-	tlsc, err := tlsConfig(opts.insecure, opts.certf, opts.keyf, opts.rootCerts)
+	var keylogger io.WriteCloser
+	if opts.keyLogf != "" {
+		var err error
+		keylogger, err = file(opts.keyLogf, true)
+		if err != nil {
+			return fmt.Errorf("error opening %s: %s", opts.outputf, err)
+		}
+		defer keylogger.Close()
+	}
+
+	tlsc, err := tlsConfig(opts.insecure, opts.certf, opts.keyf, opts.rootCerts, keylogger)
 	if err != nil {
 		return err
 	}
@@ -212,7 +224,7 @@ func attack(opts *attackOpts) (err error) {
 }
 
 // tlsConfig builds a *tls.Config from the given options.
-func tlsConfig(insecure bool, certf, keyf string, rootCerts []string) (*tls.Config, error) {
+func tlsConfig(insecure bool, certf, keyf string, rootCerts []string, keylogger io.Writer) (*tls.Config, error) {
 	var err error
 	files := map[string][]byte{}
 	filenames := append([]string{certf, keyf}, rootCerts...)
@@ -224,7 +236,10 @@ func tlsConfig(insecure bool, certf, keyf string, rootCerts []string) (*tls.Conf
 		}
 	}
 
-	c := tls.Config{InsecureSkipVerify: insecure}
+	c := tls.Config{
+		InsecureSkipVerify: insecure,
+		KeyLogWriter:       keylogger,
+	}
 	if cert, ok := files[certf]; ok {
 		key, ok := files[keyf]
 		if !ok {
